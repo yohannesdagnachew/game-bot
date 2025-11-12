@@ -5,15 +5,17 @@ import Transaction from "../models/transactionModel.js";
 import axios from "axios";
 import FormData from "form-data";
 import { PAYMENT_STATUS } from "../config/constants.js";
-import  {createTransaction, findTransactionById, updateTransactionStatus} from  "../utils/helper/helper.js"
-
-
+import {
+  createTransaction,
+  findTransactionById,
+  updateTransactionStatus,
+} from "../utils/helper/helper.js";
+import userModel from "../models/userModel.js";
 
 const transactionRouter = router.Router();
 
 const { CHAPA_KEY, CHAPA_WEBHOOK_SECRET, CHAPA_API, CHAPA_API_WEB } =
   process.env;
-
 
 transactionRouter.post("/deposit", async (req, res) => {
   try {
@@ -129,7 +131,7 @@ transactionRouter.post("/deposit", async (req, res) => {
       });
     }
   } catch (err) {
-    console.log(err)
+    console.log(err);
     const statusCode = err.response?.status || err.statusCode || 500;
     const message =
       err.response?.data?.message ||
@@ -142,38 +144,193 @@ transactionRouter.post("/deposit", async (req, res) => {
   }
 });
 
+function makeChapaReference(userId) {
+  const ts = Date.now().toString(36).toUpperCase(); // ~6–8 chars
+  const rnd = Math.random().toString(36).slice(2, 6).toUpperCase(); // 4 chars
+  const tail = String(userId || "")
+    .slice(-4)
+    .toUpperCase(); // 4 chars max
+  // WD- + ts + rnd + tail  => ~3 + 8 + 4 + 4 = <= 19 chars
+  return `WD-${ts}${rnd}${tail}`;
+}
 
+transactionRouter.post("/approve", async (req, res) => {
+  console.log("Received approval callback:", req.body);
 
+  const CHAPA_APPROVAL_SECRET = process.env.CHAPA_APPROVAL_SECRET;
+  try {
+    const { secret, reference, amount } = req.body;
+    console.log("✅ Transfer approved callback from Chapa:", req.body);
 
+    const transaction = await Transaction.findOne({ reference: reference });
+    if (!transaction) {
+      console.log("Transaction not found for reference:", reference);
+      return res.status(404).json({ message: "Transaction not found" });
+    }
 
+    if (transaction.status === "success") {
+      console.log("2");
+      return res.status(404).json({ message: "Transaction already approved" });
+    }
 
+    if (transaction.status === "failed") {
+      console.log("3");
+      return res.status(404).json({ message: "Transaction already failed" });
+    }
 
+    if (transaction.status !== "pending") {
+      console.log("4");
+      return res
+        .status(400)
+        .json({ message: "Transaction not in pending state" });
+    }
 
-transactionRouter.post("/withdraw", async (req, res) => {
-  const userData = req.body;
-  const { amount, paymentMethod, token } = userData;
+    if (Number(amount) > transaction.amount) {
+      console.log("5");
+      return res.status(400).json({ message: "Amount mismatch" });
+    }
 
-  if (!amount || !paymentMethod || token) {
-    return res.status(400).json({ message: "Forbidden request" });
+    if (Number(amount) >= 10000) {
+      console.log("6");
+      return res.status(400).json({ message: "Amount exceeds limit" });
+    }
+
+    const user = await userModel.findById(transaction.user);
+    if (!user) {
+      console.log("User not found for transaction:", transaction._id);
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    transaction.status = "success";
+    await transaction.save();
+
+    user.balance -= transaction.amount;
+    await user.save();
+
+    return res.json({ message: "Transfer approved successfully" });
+  } catch (err) {
+    console.error("Approval error:", err);
+    res.status(500).json({ message: "Server error" });
   }
-
-  const verifyUser = await validateUser(token);
-  if (!verifyUser) {
-    return res.status(401).json({ message: "Unauthorized" });
-  }
-
-  const user = await UserModel.findOne({ _id: verifyUser._id });
-
-  if (!user) {
-    return res.status(400).json({ message: "User not found" });
-  }
-
-  return;
 });
 
+transactionRouter.post("/withdraw", async (req, res) => {
+  try {
+    const { token, amount, bank_code, paymentMethod } = req.body;
 
+    // 1) Validate inputs
+    if (!token || amount == null || bank_code == null) {
+      return res.status(400).json({ message: "Missing required fields" });
+    }
 
-transactionRouter.post("/webhook" , async (req, res) => {
+    const amountNum = Number(amount);
+    const bankCodeNum = Number(bank_code);
+    if (!Number.isFinite(amountNum) || amountNum <= 0) {
+      return res
+        .status(400)
+        .json({ message: "amount must be a positive number" });
+    }
+    if (!Number.isFinite(bankCodeNum)) {
+      return res.status(400).json({ message: "bank_code must be a number" });
+    }
+
+    // 2) Validate user
+    const verifyUser = await validateUser(token);
+    if (!verifyUser) return res.status(401).json({ message: "Unauthorized" });
+
+    const user = await UserModel.findById(verifyUser._id);
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    // 3) Balance check
+    if (user.balance < amountNum) {
+      return res.status(400).json({ message: "Insufficient balance" });
+    }
+
+    const account_number = user.phone;
+    
+    if (!account_number) {
+      return res
+        .status(400)
+        .json({ message: "User does not have a valid phone number" });
+    }
+
+    // 4) Build payload for Chapa
+    const reference = makeChapaReference(user._id);
+    let recipientAccount = String(account_number).trim();
+
+    // If a local mobile number like 09xxxxxxxx, convert to 2519xxxxxxxx (common wallet format)
+    if (/^09\d{8}$/.test(recipientAccount)) {
+      recipientAccount = `251${recipientAccount.slice(1)}`;
+    }
+
+    const amountAfterFee = amountNum * 0.975; // deduct 2.5% fee
+
+    const payload = {
+      account_name: user.name || "Recipient", // REQUIRED by Chapa
+      account_number: recipientAccount,
+      amount: amountAfterFee, // send as number
+      currency: "ETB", // REQUIRED by Chapa
+      reference, // must be unique
+      bank_code: bankCodeNum, // send as number
+      paymentMethod,
+    };
+
+    const transaction = await createTransaction(
+      user._id,
+      amount,
+      paymentMethod,
+      "withdraw",
+      reference
+    );
+
+    // 5) Call Chapa
+    const chapaRes = await axios.post(
+      "https://api.chapa.co/v1/transfers",
+      payload,
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.CHAPA_KEY}`,
+          "Content-Type": "application/json",
+        },
+        timeout: 15000,
+      }
+    );
+
+    const result = chapaRes.data;
+    if (!result || result.status !== "success") {
+      return res
+        .status(400)
+        .json({ message: "Chapa transfer failed", chapa: result });
+    }
+
+    // 6) Create transaction and deduct balance
+
+    // verifyChapaTransfer(reference);
+
+    return res.json({
+      message: "Withdrawal request sent successfully",
+      chapa: result,
+      transferId: transaction._id,
+      newBalance: user.balance,
+    });
+  } catch (err) {
+    // Expose the real reason from Chapa
+    const status = err.response?.status || 500;
+    const body = err.response?.data;
+    console.error(
+      "Withdraw error:",
+      status,
+      JSON.stringify(body || err.message, null, 2)
+    );
+
+    return res.status(status).json({
+      message: body?.message || "Chapa transfer failed",
+      errors: body?.errors || body || err.message,
+    });
+  }
+});
+
+transactionRouter.post("/webhook", async (req, res) => {
   try {
     const payload = JSON.stringify(req.body);
     const chapaSig = req.headers["chapa-signature"];
@@ -235,8 +392,7 @@ transactionRouter.post("/webhook" , async (req, res) => {
     console.error("Webhook Error:", error);
     next(error);
   }
-}) 
-
+});
 
 transactionRouter.post("/history", async (req, res) => {
   try {
@@ -280,7 +436,6 @@ transactionRouter.post("/history", async (req, res) => {
       requestStatus: "success",
       history: formatted,
     });
-
   } catch (err) {
     console.log("History error:", err);
     return res.status(500).json({
@@ -289,6 +444,5 @@ transactionRouter.post("/history", async (req, res) => {
     });
   }
 });
-
 
 export default transactionRouter;

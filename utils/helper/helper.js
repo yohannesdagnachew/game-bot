@@ -1,6 +1,5 @@
 import Transaction from "../../models/transactionModel.js";
 
-
 export const findTransactionById = async (_id) => {
   const transaction = await Transaction.findById(_id);
   if (!transaction) {
@@ -11,16 +10,22 @@ export const findTransactionById = async (_id) => {
   return transaction;
 };
 
-export const createTransaction = async (userId, amount, paymentMethod, type) => {
+export const createTransaction = async (
+  userId,
+  amount,
+  paymentMethod,
+  type,
+  reference = ""
+) => {
   const transaction = await Transaction.create({
     user: userId,
     amount,
     paymentMethod,
     type,
+    reference,
   });
   return transaction;
-}
-
+};
 
 export const updateTransactionStatus = async (_id, status) => {
   const transaction = await findTransactionById(_id);
