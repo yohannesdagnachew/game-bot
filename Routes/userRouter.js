@@ -102,7 +102,6 @@ userRouter.post("/login", async (req, res) => {
       86400 // 24h freshness window; tweak as you like
     );
 
-    console.log(ok, reason, user )
     
     if (!ok) {
       return res.status(401).json({ ok: false, error: reason || "Invalid initData" });

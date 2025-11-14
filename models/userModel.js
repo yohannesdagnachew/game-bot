@@ -14,7 +14,8 @@ const userSchema = new Schema(
     refferedBy: { type: String, default: "" }, 
     status: { type: String, default: "active", enum: ["active", "inactive", "suspended"] },
     lastUpdate: { type: Date, default: Date.now }, 
-    diposits: { type: Number, default: 0 },
+    deposits: { type: Number, default: 0 },
+    spins: { type: Number, default: 0 },
   },
   { timestamps: true }
 );

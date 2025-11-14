@@ -6,6 +6,7 @@ import telegramRouter from "./Routes/telegramRouter.js"
 import gameserviceRoutes from './Routes/ABCD/gameservice.js';
 import publicRoutes from './Routes/ABCD/public.js';
 import listRouter from './Routes/ABCD/list.js';
+import spinRouter from './Routes/spinRouter.js';
 import { bot } from "./bot/bot.js";
 
 
@@ -61,6 +62,7 @@ app.use('/api', telegramRouter);
 app.use("/gameservice", gameserviceRoutes);
 app.use("/api", publicRoutes);
 app.use("/api", listRouter);
+app.use("/api", spinRouter)
 
 
 

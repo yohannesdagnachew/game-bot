@@ -216,7 +216,29 @@ transactionRouter.post("/approve", async (req, res) => {
 
 transactionRouter.post("/withdraw", async (req, res) => {
   try {
-    const { token, amount, bank_code, paymentMethod } = req.body;
+    const { token, amount, paymentMethod } = req.body;
+
+    let bank_code = '';
+
+    const paymentMethodTrim = paymentMethod.slice(3);
+    const paymentMethodOptions = ["telebirr", "cbebirr", "mpesa"];
+
+    if (!paymentMethodOptions.includes(paymentMethodTrim)) {
+      return res.status(400).json({ message: "Invalid payment method" });
+    }
+
+    if (paymentMethodTrim === "telebirr"){
+      bank_code = 855;
+    }
+    if (paymentMethodTrim === "cbebirr"){
+      bank_code = 128;
+    }
+    if (paymentMethodTrim === "mpesa"){
+      bank_code = 266;
+    }
+
+    if(bank_code === '') return res.status(400).json({ message: "Invalid bank code" });
+
 
     // 1) Validate inputs
     if (!token || amount == null || bank_code == null) {
@@ -247,7 +269,8 @@ transactionRouter.post("/withdraw", async (req, res) => {
     }
 
     const account_number = user.phone;
-    
+  
+
     if (!account_number) {
       return res
         .status(400)
@@ -272,13 +295,13 @@ transactionRouter.post("/withdraw", async (req, res) => {
       currency: "ETB", // REQUIRED by Chapa
       reference, // must be unique
       bank_code: bankCodeNum, // send as number
-      paymentMethod,
+      paymentMethodTrim,
     };
 
     const transaction = await createTransaction(
       user._id,
       amount,
-      paymentMethod,
+      paymentMethodTrim,
       "withdraw",
       reference
     );
