@@ -45,6 +45,7 @@ bot.on("contact", async (msg) => {
     const phoneRaw = msg.contact?.phone_number || "";
     const phone = normalizePhone(phoneRaw);
 
+
     if (!telegramId || !phone) {
       return bot.sendMessage(
         chatId,
@@ -83,12 +84,19 @@ bot.on("contact", async (msg) => {
         }
       );
 
-      await bot.sendMessage(
-        chatId,
-        `✅ Thanks ${
-          user.name || firstName
-        }! Your contact has been received.\n📞 ${user.phone}`
-      );
+       const webAppUrl = process.env.FRONTEND_URL;
+        await bot.sendMessage(chatId, "Welcome to VamoGames! 🎮", {
+          reply_markup: {
+            inline_keyboard: [
+              [
+                {
+                  text: "🎮 Open Game App",
+                  web_app: { url: webAppUrl },
+                },
+              ],
+            ],
+          },
+        });
     } catch (err) {
       // Handle phone unique constraint: someone else (no telegramId yet) may have this phone
       // Mongo duplicate key error code
@@ -106,19 +114,12 @@ bot.on("contact", async (msg) => {
         byPhone.lastUpdate = new Date();
         await byPhone.save();
 
-        const webAppUrl = process.env.FRONTEND_URL;
-        await bot.sendMessage(chatId, "Welcome to VamoGames! 🎮", {
-          reply_markup: {
-            inline_keyboard: [
-              [
-                {
-                  text: "🎮 Open Game App",
-                  web_app: { url: webAppUrl },
-                },
-              ],
-            ],
-          },
-        });
+        await bot.sendMessage(
+          chatId,
+          `✅ Thanks ${
+            byPhone.name || firstName
+          }! Your contact has been linked.\n📞 ${byPhone.phone}`
+        );
       } else {
         // Very rare: duplicate error but doc not found; surface a message
         await bot.sendMessage(
@@ -151,12 +152,13 @@ bot.onText(/\/start/, async (msg) => {
           [
             {
               text: "🎮 Open Game App",
-              web_app: { url: webAppUrl },
-            },
-          ],
-        ],
-      },
+              web_app: { url: webAppUrl }
+            }
+          ]
+        ]
+      }
     });
+
   } catch (e) {
     console.error("start handler error:", e);
   }
