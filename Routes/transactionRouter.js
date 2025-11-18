@@ -292,7 +292,7 @@ transactionRouter.post("/withdraw", async (req, res) => {
 
     const payload = {
       account_name: user.name || "Recipient", // REQUIRED by Chapa
-      account_number: recipientAccount,
+      account_number: user.phone, // REQUIRED by Chapa
       amount: amountAfterFee, // send as number
       currency: "ETB", // REQUIRED by Chapa
       reference, // must be unique
