@@ -3,7 +3,7 @@ import { validate, parse } from "@telegram-apps/init-data-node";
 import UserModel from "../models/userModel.js";
 import Transaction from "../models/transactionModel.js"
 import validateUser from "../utils/verification/validateUser.js";
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 import { PAYMENT_STATUS } from "../config/constants.js";
 
 import { verifyTelegramInitData }  from "../utils/verification/verifyTelegramInitData.js"
