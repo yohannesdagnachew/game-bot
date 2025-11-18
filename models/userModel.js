@@ -15,7 +15,7 @@ const userSchema = new Schema(
     status: { type: String, default: "active", enum: ["active", "inactive", "suspended"] },
     lastUpdate: { type: Date, default: Date.now }, 
     deposits: { type: Number, default: 0 },
-    spins: { type: Number, default: 0 },
+    spins: { type: Number, default: 5 },
   },
   { timestamps: true }
 );

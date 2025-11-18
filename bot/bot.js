@@ -45,15 +45,6 @@ bot.on("contact", async (msg) => {
     const phoneRaw = msg.contact?.phone_number || "";
     const phone = normalizePhone(phoneRaw);
 
-    console.log("📥 contact:", {
-      chatId,
-      telegramId,
-      phone,
-      firstName,
-      lastName,
-      username,
-    });
-
     if (!telegramId || !phone) {
       return bot.sendMessage(
         chatId,
@@ -115,12 +106,19 @@ bot.on("contact", async (msg) => {
         byPhone.lastUpdate = new Date();
         await byPhone.save();
 
-        await bot.sendMessage(
-          chatId,
-          `✅ Thanks ${
-            byPhone.name || firstName
-          }! Your contact has been linked.\n📞 ${byPhone.phone}`
-        );
+        const webAppUrl = process.env.FRONTEND_URL;
+        await bot.sendMessage(chatId, "Welcome to VamoGames! 🎮", {
+          reply_markup: {
+            inline_keyboard: [
+              [
+                {
+                  text: "🎮 Open Game App",
+                  web_app: { url: webAppUrl },
+                },
+              ],
+            ],
+          },
+        });
       } else {
         // Very rare: duplicate error but doc not found; surface a message
         await bot.sendMessage(
@@ -144,15 +142,21 @@ bot.on("contact", async (msg) => {
 bot.onText(/\/start/, async (msg) => {
   try {
     const chatId = msg.chat.id;
-    const fromId = msg.from?.id?.toString();
 
-    console.log("▶️ /start from", fromId);
+    const webAppUrl = process.env.FRONTEND_URL;
 
-    await bot.sendMessage(
-      chatId,
-      "Welcome! If asked in the Mini App, please share your phone. You can also press the button below."
-    );
-    await sendSharePhoneKeyboard(chatId);
+    await bot.sendMessage(chatId, "Welcome to VamoGames! 🎮", {
+      reply_markup: {
+        inline_keyboard: [
+          [
+            {
+              text: "🎮 Open Game App",
+              web_app: { url: webAppUrl },
+            },
+          ],
+        ],
+      },
+    });
   } catch (e) {
     console.error("start handler error:", e);
   }

@@ -3,6 +3,9 @@ import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import TelegramBot from 'node-telegram-bot-api';
 import UserModel from './models/userModel.js';
+import { startDailySpinCron } from './cron/dailySpins.js';
+
+
 
 dotenv.config();
 
@@ -13,7 +16,9 @@ const MONGO_URI = process.env.MONGO_URI;
 
 mongoose.connect(MONGO_URI).then(() => {
     console.log("Connected to database");
+    startDailySpinCron();
   });
+
 
 
 
