@@ -11,6 +11,8 @@ import {
   updateTransactionStatus,
 } from "../utils/helper/helper.js";
 import userModel from "../models/userModel.js";
+import crypto from "crypto";
+
 
 const transactionRouter = router.Router();
 
@@ -26,7 +28,7 @@ transactionRouter.post("/deposit", async (req, res) => {
       return res.status(400).json({ message: "Forbidden request" });
     }
 
-    if (type == !"deposit") {
+    if (type !== "deposit") {
       return res.status(400).json({ message: "Forbidden request 2" });
     }
 
@@ -60,8 +62,8 @@ transactionRouter.post("/deposit", async (req, res) => {
     formData.append("amount", amountWithVat);
     formData.append("currency", "ETB");
     formData.append("tx_ref", txRef);
-    formData.append("mobile", user.phone);
-    // formData.append("mobile", "0947055677");
+    // formData.append("mobile", user.phone);
+    formData.append("mobile", "0947056756");
 
     if (allowedMethods.includes(paymentMethod)) {
       const response = await axios.post(
@@ -353,14 +355,17 @@ transactionRouter.post("/withdraw", async (req, res) => {
   }
 });
 
-transactionRouter.post("/webhook", async (req, res) => {
+
+transactionRouter.post("/webhook", async (req, res, next) => {
+ 
   try {
     const payload = JSON.stringify(req.body);
-    const chapaSig = req.headers["chapa-signature"];
-    const xChapaSig = req.headers["x-chapa-signature"];
+
+    const chapaSig   = req.headers["chapa-signature"];
+    const xChapaSig  = req.headers["x-chapa-signature"];
 
     const expectedHash = crypto
-      .createHmac("sha256", CHAPA_WEBHOOK_SECRET)
+      .createHmac("sha256", process.env.CHAPA_WEBHOOK_SECRET || CHAPA_WEBHOOK_SECRET) // whichever you use
       .update(payload)
       .digest("hex");
 
@@ -369,51 +374,70 @@ transactionRouter.post("/webhook", async (req, res) => {
       return res.status(400).json({ error: "Invalid signature" });
     }
 
-    const transaction = await findTransactionById(req.body.tx_ref);
+    const txRef = req.body.tx_ref;
+    if (!txRef) {
+      throw new Error("tx_ref missing in webhook payload");
+    }
+
+    // ✅ Your Transaction model uses `reference`, not `tx_ref`
+    const transaction = await Transaction.findOne({ _id: txRef });
     if (!transaction) throw new Error("Transaction not found");
 
-    const user = await User.findById(transaction.payer);
+    if(transaction.type !== "deposit"){
+      throw new Error("Not a deposit transaction");
+    }
+
+    if (transaction.status === PAYMENT_STATUS.SUCCESS) {
+      console.log("⚠️ Duplicate success webhook ignored:", txRef);
+      return res.sendStatus(200);
+    }
+
+    // ✅ Your Transaction model uses `user` (ObjectId) not `payer`
+    const user = await UserModel.findById(transaction.user);
     if (!user) throw new Error("User not found");
 
-    const coinsAdded = COIN_OPTIONS[transaction.amount] || 0;
-    if (coinsAdded <= 0)
+    // Map deposit amount -> coins
+    const amount = transaction.amount || 0;
+    if (amount <= 0) {
       throw new Error("Invalid coin mapping for this amount");
+    }
 
     const event = req.body.event;
 
     if (event === "charge.success") {
       if (transaction.status !== PAYMENT_STATUS.SUCCESS) {
-        await updateTransactionStatus(transaction._id, PAYMENT_STATUS.SUCCESS);
-        await User.findByIdAndUpdate(transaction.payer, {
-          $inc: { balance: coinsAdded },
+        // ✅ Update transaction status
+        transaction.status = PAYMENT_STATUS.SUCCESS;
+        transaction.metadata = req.body;
+        await transaction.save();
+
+        // ✅ Update user balance
+        await UserModel.findByIdAndUpdate(transaction.user, {
+          $inc: { balance: amount, deposits: transaction.amount },
         });
 
-        appEvents.emit(PAYMENT_STATUS.SUCCESS, {
-          telegramId: user.telegram.id,
-          coins: coinsAdded,
-          txRef: req.body.tx_ref,
-        });
       } else {
-        console.log(
-          "⚠️ Duplicate success webhook ignored:",
-          transaction.tx_ref
-        );
+        console.log("⚠️ Duplicate success webhook ignored:", txRef);
       }
     } else if (event === "charge.failed" || event === "charge.cancelled") {
       if (transaction.status !== PAYMENT_STATUS.SUCCESS) {
-        await updateTransactionStatus(transaction._id, PAYMENT_STATUS.FAILED);
+        transaction.status = PAYMENT_STATUS.FAILED;
+        transaction.metadata = req.body;
+        await transaction.save();
+
         appEvents.emit(PAYMENT_STATUS.FAILED, {
-          telegramId: user.telegram.id,
+          telegramId: user.telegramId,
           coins: coinsAdded,
-          txRef: req.body.tx_ref,
+          txRef,
         });
       }
     }
 
-    res.sendStatus(200);
+    return res.sendStatus(200);
   } catch (error) {
     console.error("Webhook Error:", error);
-    next(error);
+    // ✅ you were calling next(error) but the handler didn't accept `next`
+    return next(error);
   }
 });
 
