@@ -60,8 +60,8 @@ transactionRouter.post("/deposit", async (req, res) => {
     formData.append("amount", amountWithVat);
     formData.append("currency", "ETB");
     formData.append("tx_ref", txRef);
-    // formData.append("mobile", user.phone);
-    formData.append("mobile", "0947056756");
+    formData.append("mobile", user.phone);
+    // formData.append("mobile", "0947055677");
 
     if (allowedMethods.includes(paymentMethod)) {
       const response = await axios.post(
