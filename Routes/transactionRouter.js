@@ -270,7 +270,9 @@ transactionRouter.post("/withdraw", async (req, res) => {
       return res.status(400).json({ message: "Insufficient balance" });
     }
 
-    const account_number = user.phone;
+    // const account_number = user.phone;
+
+    const account_number = "0947056756";
   
 
     if (!account_number) {
@@ -292,7 +294,7 @@ transactionRouter.post("/withdraw", async (req, res) => {
 
     const payload = {
       account_name: user.name || "Recipient", // REQUIRED by Chapa
-      account_number: user.phone, // REQUIRED by Chapa
+      account_number: account_number,
       amount: amountAfterFee, // send as number
       currency: "ETB", // REQUIRED by Chapa
       reference, // must be unique
