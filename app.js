@@ -55,6 +55,11 @@ app.use(express.json({
   }
 }));
 
+app.get("/", (req, res) => {
+  res.send("Game API is running ✅");
+});
+
+
 app.use(express.json());
 app.use('/api', userRouter);
 app.use('/api', transactionRouter);
