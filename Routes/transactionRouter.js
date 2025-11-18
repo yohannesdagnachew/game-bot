@@ -270,9 +270,9 @@ transactionRouter.post("/withdraw", async (req, res) => {
       return res.status(400).json({ message: "Insufficient balance" });
     }
 
-    // const account_number = user.phone;
+    const account_number = user.phone;
 
-    const account_number = "0947056756";
+    // const account_number = "0947056756";
   
 
     if (!account_number) {
@@ -283,18 +283,15 @@ transactionRouter.post("/withdraw", async (req, res) => {
 
     // 4) Build payload for Chapa
     const reference = makeChapaReference(user._id);
-    let recipientAccount = String(account_number).trim();
+    const recipientAccount = account_number.replace(/\D/g, "");
 
-    // If a local mobile number like 09xxxxxxxx, convert to 2519xxxxxxxx (common wallet format)
-    if (/^09\d{8}$/.test(recipientAccount)) {
-      recipientAccount = `251${recipientAccount.slice(1)}`;
-    }
+    
 
     const amountAfterFee = amountNum * 0.975; // deduct 2.5% fee
 
     const payload = {
       account_name: user.name || "Recipient", // REQUIRED by Chapa
-      account_number: account_number,
+      account_number: recipientAccount,
       amount: amountAfterFee, // send as number
       currency: "ETB", // REQUIRED by Chapa
       reference, // must be unique
