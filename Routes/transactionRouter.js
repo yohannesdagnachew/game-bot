@@ -65,9 +65,9 @@ transactionRouter.post("/deposit", async (req, res) => {
     formData.append("amount", amountWithVat);
     formData.append("currency", "ETB");
     formData.append("tx_ref", txRef);
-    // formData.append("mobile", user.phone);
     formData.append("email", `gamebot${user.telegramId}@gmail.com`);
-    formData.append("mobile", "0947056756");
+     formData.append("mobile", user.phone);
+    // formData.append("mobile", "0947056756");
 
     if (allowedMethods.includes(paymentMethod)) {
       const response = await axios.post(
@@ -359,6 +359,7 @@ transactionRouter.post("/webhook", async (req, res, next) => {
   try {
     console.log("Received webhook:", req.body);
     const payload = JSON.stringify(req.body);
+    const {email} = req.body;
 
     if (!email.includes("gamebot")) {
       try {
