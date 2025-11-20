@@ -388,6 +388,11 @@ transactionRouter.post("/webhook", async (req, res, next) => {
         const transaction = await findTransactionByIdTinder(txRef);
         if (!transaction) throw new Error("Transaction not found");
 
+        if (transaction.status === PAYMENT_STATUS.SUCCESS) {
+          console.log("⚠️ Duplicate success webhook ignored:");
+          return res.sendStatus(200);
+        }
+
         const user = await TinderUser.findById(transaction.payer);
         if (!user) throw new Error("User not found");
 
@@ -430,7 +435,7 @@ transactionRouter.post("/webhook", async (req, res, next) => {
       }
     }
 
-     console.log("#######################Tinder#######################")
+     console.log("#######################Game#######################")
 
     const chapaSig = req.headers["chapa-signature"];
     const xChapaSig = req.headers["x-chapa-signature"];
