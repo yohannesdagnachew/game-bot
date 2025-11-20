@@ -357,7 +357,7 @@ transactionRouter.post("/withdraw", async (req, res) => {
 
 transactionRouter.post("/webhook", async (req, res, next) => {
   try {
-    const { email } = req.body;
+    console.log("Received webhook:", req.body);
     const payload = JSON.stringify(req.body);
 
     if (!email.includes("gamebot")) {
