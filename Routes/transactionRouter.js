@@ -5,6 +5,7 @@ import Transaction from "../models/transactionModel.js";
 import axios from "axios";
 import FormData from "form-data";
 import { PAYMENT_STATUS } from "../config/constants.js";
+import {COIN_OPTIONS} from "../config/tinderconstant.js";
 import {
   createTransaction,
   findTransactionById,
@@ -12,9 +13,11 @@ import {
 } from "../utils/helper/helper.js";
 import userModel from "../models/userModel.js";
 import crypto from "crypto";
-
+import TinderTransaction from "../models/Tinder/tinderTransactionModel.js";
+import TinderUser from "../models/Tinder/tinderUserModel.js";
 
 const transactionRouter = router.Router();
+
 
 const { CHAPA_KEY, CHAPA_WEBHOOK_SECRET, CHAPA_API, CHAPA_API_WEB } =
   process.env;
@@ -62,8 +65,9 @@ transactionRouter.post("/deposit", async (req, res) => {
     formData.append("amount", amountWithVat);
     formData.append("currency", "ETB");
     formData.append("tx_ref", txRef);
-    formData.append("mobile", user.phone);
-    // formData.append("mobile", "0947056756");
+    // formData.append("mobile", user.phone);
+    formData.append("email", `gamebot${user.telegramId}@gmail.com`);
+    formData.append("mobile", "0947056756");
 
     if (allowedMethods.includes(paymentMethod)) {
       const response = await axios.post(
@@ -71,7 +75,7 @@ transactionRouter.post("/deposit", async (req, res) => {
         {
           amount: amountWithVat,
           currency: "ETB",
-          email: `user${user.telegramId}@gmail.com`,
+          email: `gamebot${user.telegramId}@gmail.com`,
           first_name: user.name,
           last_name: "User",
           tx_ref: txRef,
@@ -220,7 +224,7 @@ transactionRouter.post("/withdraw", async (req, res) => {
   try {
     const { token, amount, paymentMethod } = req.body;
 
-    let bank_code = '';
+    let bank_code = "";
 
     const paymentMethodTrim = paymentMethod.slice(3);
     const paymentMethodOptions = ["telebirr", "cbebirr", "mpesa"];
@@ -229,18 +233,18 @@ transactionRouter.post("/withdraw", async (req, res) => {
       return res.status(400).json({ message: "Invalid payment method" });
     }
 
-    if (paymentMethodTrim === "telebirr"){
+    if (paymentMethodTrim === "telebirr") {
       bank_code = 855;
     }
-    if (paymentMethodTrim === "cbebirr"){
+    if (paymentMethodTrim === "cbebirr") {
       bank_code = 128;
     }
-    if (paymentMethodTrim === "mpesa"){
+    if (paymentMethodTrim === "mpesa") {
       bank_code = 266;
     }
 
-    if(bank_code === '') return res.status(400).json({ message: "Invalid bank code" });
-
+    if (bank_code === "")
+      return res.status(400).json({ message: "Invalid bank code" });
 
     // 1) Validate inputs
     if (!token || amount == null || bank_code == null) {
@@ -273,7 +277,6 @@ transactionRouter.post("/withdraw", async (req, res) => {
     const account_number = user.phone;
 
     // const account_number = "0947056756";
-  
 
     if (!account_number) {
       return res
@@ -284,8 +287,6 @@ transactionRouter.post("/withdraw", async (req, res) => {
     // 4) Build payload for Chapa
     const reference = makeChapaReference(user._id);
     const recipientAccount = account_number.replace(/\D/g, "");
-
-    
 
     const amountAfterFee = amountNum * 0.975; // deduct 2.5% fee
 
@@ -354,17 +355,82 @@ transactionRouter.post("/withdraw", async (req, res) => {
   }
 });
 
-
 transactionRouter.post("/webhook", async (req, res, next) => {
- 
   try {
+    const { email } = req.body;
     const payload = JSON.stringify(req.body);
 
-    const chapaSig   = req.headers["chapa-signature"];
-    const xChapaSig  = req.headers["x-chapa-signature"];
+    if (!email.includes("gamebot")) {
+      try {
+        const payload = JSON.stringify(req.body);
+        const chapaSig = req.headers["chapa-signature"];
+        const xChapaSig = req.headers["x-chapa-signature"];
+
+        const expectedHash = crypto
+          .createHmac("sha256", CHAPA_WEBHOOK_SECRET)
+          .update(payload)
+          .digest("hex");
+
+        if (![chapaSig, xChapaSig].includes(expectedHash)) {
+          console.warn("❌ Invalid Webhook signature:", {
+            chapaSig,
+            xChapaSig,
+          });
+          return res.status(400).json({ error: "Invalid signature" });
+        }
+
+        const transaction = await TinderTransaction.findOne({ _id: req.body.tx_ref });
+        if (!transaction) throw new Error("Transaction not found");
+
+        const user = await TinderUser.findById(transaction.payer);
+        if (!user) throw new Error("User not found");
+
+        const coinsAdded = COIN_OPTIONS[transaction.amount] || 0;
+        if (coinsAdded <= 0)
+          throw new Error("Invalid coin mapping for this amount");
+
+        const event = req.body.event;
+
+        if (event === "charge.success") {
+          if (transaction.status !== PAYMENT_STATUS.SUCCESS) {
+            await updateTransactionStatus(
+              transaction._id,
+              PAYMENT_STATUS.SUCCESS
+            );
+            await TinderUser.findByIdAndUpdate(transaction.payer, {
+              $inc: { balance: coinsAdded },
+            });
+
+          } else {
+            console.log(
+              "⚠️ Duplicate success webhook ignored:",
+              transaction.tx_ref
+            );
+          }
+        } else if (event === "charge.failed" || event === "charge.cancelled") {
+          if (transaction.status !== PAYMENT_STATUS.SUCCESS) {
+            await updateTransactionStatus(
+              transaction._id,
+              PAYMENT_STATUS.FAILED
+            );
+          }
+        }
+
+        res.sendStatus(200);
+      } catch (error) {
+        console.error("Webhook Error:", error);
+        next(error);
+      }
+    }
+
+    const chapaSig = req.headers["chapa-signature"];
+    const xChapaSig = req.headers["x-chapa-signature"];
 
     const expectedHash = crypto
-      .createHmac("sha256", process.env.CHAPA_WEBHOOK_SECRET || CHAPA_WEBHOOK_SECRET) // whichever you use
+      .createHmac(
+        "sha256",
+        process.env.CHAPA_WEBHOOK_SECRET || CHAPA_WEBHOOK_SECRET
+      ) // whichever you use
       .update(payload)
       .digest("hex");
 
@@ -382,7 +448,7 @@ transactionRouter.post("/webhook", async (req, res, next) => {
     const transaction = await Transaction.findOne({ _id: txRef });
     if (!transaction) throw new Error("Transaction not found");
 
-    if(transaction.type !== "deposit"){
+    if (transaction.type !== "deposit") {
       throw new Error("Not a deposit transaction");
     }
 
@@ -414,7 +480,6 @@ transactionRouter.post("/webhook", async (req, res, next) => {
         await UserModel.findByIdAndUpdate(transaction.user, {
           $inc: { balance: amount, deposits: transaction.amount },
         });
-
       } else {
         console.log("⚠️ Duplicate success webhook ignored:", txRef);
       }
