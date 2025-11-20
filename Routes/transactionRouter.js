@@ -361,12 +361,10 @@ transactionRouter.post("/webhook", async (req, res, next) => {
   try {
     console.log("Received webhook:", req.body);
     const payload = JSON.stringify(req.body);
-    const {email} = req.body;
+    const {email,tx_ref} = req.body;
 
     if (!email.includes("gamebot")) {
 
-      const tinderTran = await TinderTransaction.find({})
-      console.log("Tinder Transactions:", tinderTran);
       try {
         const payload = JSON.stringify(req.body);
         const chapaSig = req.headers["chapa-signature"];

@@ -1,4 +1,5 @@
 import Transaction from "../../models/transactionModel.js";
+import TinderTransaction from "../../models/Tinder/tinderTransactionModel.js"
 
 export const findTransactionById = async (_id) => {
   const transaction = await Transaction.findById(_id);
@@ -38,7 +39,7 @@ export const updateTransactionStatus = async (_id, status) => {
 
 
 export const findTransactionByIdTinder = async (_id) => {
-  const transaction = await Transaction.findById(_id);
+  const transaction = await TinderTransaction.findById(_id);
   if (!transaction) {
     const err = new Error(`Transaction not found for id ${_id}`);
     err.status = 404;
