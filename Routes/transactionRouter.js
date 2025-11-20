@@ -365,6 +365,7 @@ transactionRouter.post("/webhook", async (req, res, next) => {
 
     if (!email.includes("gamebot")) {
 
+      console.log("#######################Tinder#######################")
       try {
         const payload = JSON.stringify(req.body);
         const chapaSig = req.headers["chapa-signature"];
@@ -421,12 +422,15 @@ transactionRouter.post("/webhook", async (req, res, next) => {
           }
         }
 
-        res.sendStatus(200);
+       return res.sendStatus(200);
       } catch (error) {
         console.error("Webhook Error:", error);
         next(error);
+        return
       }
     }
+
+     console.log("#######################Tinder#######################")
 
     const chapaSig = req.headers["chapa-signature"];
     const xChapaSig = req.headers["x-chapa-signature"];
