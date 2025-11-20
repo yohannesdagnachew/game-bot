@@ -359,7 +359,6 @@ transactionRouter.post("/withdraw", async (req, res) => {
 
 transactionRouter.post("/webhook", async (req, res, next) => {
   try {
-    console.log("Received webhook:", req.body);
     const payload = JSON.stringify(req.body);
     const {email,tx_ref} = req.body;
 
@@ -387,8 +386,9 @@ transactionRouter.post("/webhook", async (req, res, next) => {
         const txRef = req.body.tx_ref;
         const transaction = await findTransactionByIdTinder(txRef);
         if (!transaction) throw new Error("Transaction not found");
+        console.log(transaction)
 
-        if (transaction.status === PAYMENT_STATUS.SUCCESS) {
+        if (transaction.status === "success") {
           console.log("⚠️ Duplicate success webhook ignored:");
           return res.sendStatus(200);
         }
