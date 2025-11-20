@@ -365,7 +365,7 @@ transactionRouter.post("/webhook", async (req, res, next) => {
 
     if (!email.includes("gamebot")) {
 
-      const tinderTran = await findTransactionByIdTinder(req.body.tx_ref);
+      const tinderTran = await TinderTransaction.find({})
       console.log("Tinder Transactions:", tinderTran);
       try {
         const payload = JSON.stringify(req.body);
