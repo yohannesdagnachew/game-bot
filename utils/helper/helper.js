@@ -38,6 +38,8 @@ export const updateTransactionStatus = async (_id, status) => {
 
 
 
+
+
 export const findTransactionByIdTinder = async (_id) => {
   const transaction = await TinderTransaction.findById(_id);
   if (!transaction) {
@@ -49,7 +51,7 @@ export const findTransactionByIdTinder = async (_id) => {
 };
 
 export const updateTransactionStatusTinder = async (_id, status) => {
-  const transaction = await findTransactionById(_id);
+  const transaction = await findTransactionByIdTinder(_id);
   transaction.status = status;
   await transaction.save();
   return transaction;
