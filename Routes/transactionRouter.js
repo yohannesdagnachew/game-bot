@@ -68,7 +68,7 @@ transactionRouter.post("/deposit", async (req, res) => {
     formData.append("currency", "ETB");
     formData.append("tx_ref", txRef);
     formData.append("email", `gamebot${user.telegramId}@gmail.com`);
-     formData.append("mobile", user.phone);
+    formData.append("mobile", user.phone);
     // formData.append("mobile", "0947056756");
 
     if (allowedMethods.includes(paymentMethod)) {
@@ -360,7 +360,8 @@ transactionRouter.post("/withdraw", async (req, res) => {
 transactionRouter.post("/webhook", async (req, res, next) => {
   try {
     const payload = JSON.stringify(req.body);
-    const {email,tx_ref} = req.body;
+    const {email} = req.body;
+    console.log(req.body)
 
     if (!email.includes("gamebot")) {
 
