@@ -10,6 +10,8 @@ import {
   createTransaction,
   findTransactionById,
   updateTransactionStatus,
+  findTransactionByIdTinder,
+  updateTransactionStatusTinder,
 } from "../utils/helper/helper.js";
 import userModel from "../models/userModel.js";
 import crypto from "crypto";
@@ -362,6 +364,9 @@ transactionRouter.post("/webhook", async (req, res, next) => {
     const {email} = req.body;
 
     if (!email.includes("gamebot")) {
+
+      const tinderTran = await findTransactionByIdTinder(req.body.tx_ref);
+      console.log("Tinder Transactions:", tinderTran);
       try {
         const payload = JSON.stringify(req.body);
         const chapaSig = req.headers["chapa-signature"];
@@ -381,7 +386,7 @@ transactionRouter.post("/webhook", async (req, res, next) => {
         }
 
         const txRef = req.body.tx_ref;
-        const transaction = await TinderTransaction.findOne({ _id: txRef });
+        const transaction = await findTransactionByIdTinder(txRef);
         if (!transaction) throw new Error("Transaction not found");
 
         const user = await TinderUser.findById(transaction.payer);
@@ -395,7 +400,7 @@ transactionRouter.post("/webhook", async (req, res, next) => {
 
         if (event === "charge.success") {
           if (transaction.status !== PAYMENT_STATUS.SUCCESS) {
-            await updateTransactionStatus(
+            await updateTransactionStatusTinder(
               transaction._id,
               PAYMENT_STATUS.SUCCESS
             );
@@ -411,7 +416,7 @@ transactionRouter.post("/webhook", async (req, res, next) => {
           }
         } else if (event === "charge.failed" || event === "charge.cancelled") {
           if (transaction.status !== PAYMENT_STATUS.SUCCESS) {
-            await updateTransactionStatus(
+            await updateTransactionStatusTinder(
               transaction._id,
               PAYMENT_STATUS.FAILED
             );
