@@ -380,7 +380,8 @@ transactionRouter.post("/webhook", async (req, res, next) => {
           return res.status(400).json({ error: "Invalid signature" });
         }
 
-        const transaction = await TinderTransaction.findById(req.body.tx_ref);
+        const txRef = req.body.tx_ref;
+        const transaction = await TinderTransaction.findOne({ _id: txRef });
         if (!transaction) throw new Error("Transaction not found");
 
         const user = await TinderUser.findById(transaction.payer);
