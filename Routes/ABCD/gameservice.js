@@ -10,7 +10,7 @@ r.use(verifyWebhook);
 
 r.post("/callback", async (req, res) => {
   const { action } = req.body || {};
-  console.log("GAMESERVICE CALLBACK ACTION:", action);
+  
   if (action === "balance")  return handleBalance(req, res);
   if (action === "bet")      return handleBet(req, res);
   if (action === "win")      return handleWin(req, res);

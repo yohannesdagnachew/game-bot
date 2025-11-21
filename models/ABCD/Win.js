@@ -7,7 +7,8 @@ const winSchema = new Schema(
     gameUuid: { type: String, required: true },
     betId: { type: String, required: true },
     betTrxId: { type: String, required: true }, 
-    type: { type: String, enum: ["win", "jackpot"], required: true }, 
+    type: { type: String, enum: ["win", "jackpot"], required: true },
+
 
     userId: { type: String, required: true },
     sessionId: { type: String, required: true },
