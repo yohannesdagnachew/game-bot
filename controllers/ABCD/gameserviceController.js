@@ -13,13 +13,12 @@ const BET_ARE_EXISTS = "BET_ARE_EXISTS";
 const ACTION_NOT_FOUND = "ACTION_NOT_FOUND";
 const ACTION_ROLLBACKED = "ACTION_ROLLBACKED";
 
-
 function toMoneyString(n) {
   // Your user.balance is a Number; API wants a STRING with decimals
   return Number(n || 0).toFixed(2);
 }
 
-const m = (n) => Number(n || 0).toFixed(2)
+const m = (n) => Number(n || 0).toFixed(2);
 
 export async function handleBalance(req, res) {
   try {
@@ -27,7 +26,11 @@ export async function handleBalance(req, res) {
 
     // 1) action guard (optional, because route already routes by action)
     if (action !== "balance") {
-      return res.json({ error: true, code: "UNHANDLED", message: "Unknown action" });
+      return res.json({
+        error: true,
+        code: "UNHANDLED",
+        message: "Unknown action",
+      });
     }
 
     // 2) session must exist and be active
@@ -64,36 +67,61 @@ export async function handleBalance(req, res) {
     });
   } catch (e) {
     console.error(e);
-    return res.json({ error: true, code: "UNHANDLED", message: "Server error" });
+    return res.json({
+      error: true,
+      code: "UNHANDLED",
+      message: "Server error",
+    });
   }
 }
-
-
 
 export async function handleBet(req, res) {
   try {
     const b = req.body || {};
     // Required fields (minimal set we’ll use)
-    const required = ["game_uuid","amount","currency","session_id","bet_id","transaction_id"];
+    const required = [
+      "game_uuid",
+      "amount",
+      "currency",
+      "session_id",
+      "bet_id",
+      "transaction_id",
+    ];
     for (const k of required) {
       if (b[k] === undefined || b[k] === null || b[k] === "") {
-        return res.json({ error: true, code: "REQ_FIELD", message: `Missing ${k}` });
+        return res.json({
+          error: true,
+          code: "REQ_FIELD",
+          message: `Missing ${k}`,
+        });
       }
     }
 
     // 1) session + currency checks
     const session = await Session.findById(b.session_id);
     if (!session || session.status !== "active") {
-      return res.json({ error: true, code: SESSION_NOT_FOUND, message: "Session invalid" });
+      return res.json({
+        error: true,
+        code: SESSION_NOT_FOUND,
+        message: "Session invalid",
+      });
     }
     if (session.currency !== b.currency) {
-      return res.json({ error: true, code: CURRENCY_NOT_SUPPORTED, message: "Currency mismatch" });
+      return res.json({
+        error: true,
+        code: CURRENCY_NOT_SUPPORTED,
+        message: "Currency mismatch",
+      });
     }
 
     // 2) amount validation (> 0)
     const amountNum = Number(b.amount);
     if (!(amountNum >= 5)) {
-      return res.json({ error: true, code: INVALID_PAYLOAD, message: "Amount must be > 0" });
+      return res.json({
+        error: true,
+        code: INVALID_PAYLOAD,
+        message: "Amount must be > 0",
+      });
     }
 
     // 3) Idempotency: same transaction_id → return success with current balance
@@ -104,25 +132,43 @@ export async function handleBet(req, res) {
         error: false,
         code: OK,
         message: "Bet already processed",
-        data: { balance: toMoneyString(user?.balance || 0), transaction_id: existing._id }
+        data: {
+          balance: toMoneyString(user?.balance || 0),
+          transaction_id: existing._id,
+        },
       });
     }
 
     // 4) Duplicate pair safeguard: (game_uuid + bet_id)
-    const pairExists = await Bet.findOne({ gameUuid: b.game_uuid, betId: b.bet_id });
+    const pairExists = await Bet.findOne({
+      gameUuid: b.game_uuid,
+      betId: b.bet_id,
+    });
     if (pairExists) {
-      return res.json({ error: true, code: BET_ARE_EXISTS, message: "Bet already exists" });
+      return res.json({
+        error: true,
+        code: BET_ARE_EXISTS,
+        message: "Bet already exists",
+      });
     }
 
     // 5) Load user, check funds (unless freeround)
     const user = await User.findById(session.userId);
     if (!user) {
-      return res.json({ error: true, code: "PLAYER_NOT_FOUND", message: "User not found" });
+      return res.json({
+        error: true,
+        code: "PLAYER_NOT_FOUND",
+        message: "User not found",
+      });
     }
 
     const isFreeround = !!b.freeround_id;
     if (!isFreeround && user.balance < amountNum) {
-      return res.json({ error: true, code: INSUFFICIENT_BALANCE, message: "Insufficient balance" });
+      return res.json({
+        error: true,
+        code: INSUFFICIENT_BALANCE,
+        message: "Insufficient balance",
+      });
     }
 
     // 6) Mutate balance (skip for freeround)
@@ -142,7 +188,11 @@ export async function handleBet(req, res) {
       currency: b.currency,
       amount: amountNum,
       freeround: isFreeround
-        ? { id: b.freeround_id || "", clientId: b.client_freeround_id || "", type: b.freeround_type || "" }
+        ? {
+            id: b.freeround_id || "",
+            clientId: b.client_freeround_id || "",
+            type: b.freeround_type || "",
+          }
         : undefined,
       status: "accepted",
     });
@@ -152,143 +202,204 @@ export async function handleBet(req, res) {
       error: false,
       code: OK,
       message: "Bet placed successfully",
-      data: { balance: toMoneyString(user.balance), transaction_id: b.transaction_id }
+      data: {
+        balance: toMoneyString(user.balance),
+        transaction_id: b.transaction_id,
+      },
     });
   } catch (e) {
     console.error(e);
-    return res.json({ error: true, code: "UNHANDLED", message: "Server error" });
-  }
-}
-
-
-export async function handleWin(req, res) {
-  try {
-    const w = req.body || {};
-    const required = ["game_uuid","amount","currency","session_id","bet_id","transaction_id","bet_trx_id"];
-    for (const k of required) {
-      if (w[k] === undefined || w[k] === null || w[k] === "") {
-        return res.json({ error: true, code: "REQ_FIELD", message: `Missing ${k}` });
-      }
-    }
-
-    // 1) session + currency
-    const session = await Session.findById(w.session_id);
-    if (!session || session.status !== "active") {
-      return res.json({ error: true, code: SESSION_NOT_FOUND, message: "Session invalid" });
-    }
-    if (session.currency !== w.currency) {
-      return res.json({ error: true, code: CURRENCY_NOT_SUPPORTED, message: "Currency mismatch" });
-    }
-
-    // 2) amount > 0
-    const amountNum = Number(w.amount);
-    if (!(amountNum > 0)) {
-      return res.json({ error: true, code: INVALID_PAYLOAD, message: "Amount must be > 0" });
-    }
-
-    // 3) idempotency on win transaction_id
-    const existing = await Win.findById(w.transaction_id);
-    if (existing) {
-      const user = await User.findById(session.userId);
-      return res.json({
-        error: false, code: OK, message: "Win already processed",
-        data: { balance: toMoneyString(user?.balance || 0), transaction_id: existing._id }
-      });
-    }
-
-    // 4) referenced bet must exist and not be rolled back
-    const bet = await Bet.findById(w.bet_trx_id);
-    if (!bet) return res.json({ error: true, code: ACTION_NOT_FOUND, message: "Original bet not found" });
-    if (bet.status === "rolled_back") {
-      return res.json({ error: true, code: ACTION_ROLLBACKED, message: "Bet was rolled back" });
-    }
-
-    // 5) credit user
-    const user = await User.findById(session.userId);
-    if (!user) return res.json({ error: true, code: "PLAYER_NOT_FOUND", message: "User not found" });
-
-    user.balance = Number(user.balance || 0) + amountNum;
-    await user.save();
-
-    // 6) persist win
-    await Win.create({
-      _id: w.transaction_id,
-      gameUuid: w.game_uuid,
-      betId: w.bet_id,
-      betTrxId: w.bet_trx_id,
-      userId: session.userId,
-      sessionId: w.session_id,
-      currency: w.currency,
-      amount: amountNum,
-      freeround: w.freeround_id
-        ? { id: w.freeround_id || "", clientId: w.client_freeround_id || "", type: w.freeround_type || "" }
-        : undefined,
-    });
-
-    // 7) respond with new balance
     return res.json({
-      error: false, code: OK, message: "Win credited successfully",
-      data: { balance: toMoneyString(user.balance), transaction_id: w.transaction_id }
+      error: true,
+      code: "UNHANDLED",
+      message: "Server error",
     });
-  } catch (e) {
-    console.error(e);
-    return res.json({ error: true, code: "UNHANDLED", message: "Server error" });
   }
 }
+
+// export async function handleWin(req, res) {
+//   try {
+//     const w = req.body || {};
+//     const required = ["game_uuid","amount","currency","session_id","bet_id","transaction_id","bet_trx_id"];
+//     for (const k of required) {
+//       if (w[k] === undefined || w[k] === null || w[k] === "") {
+//         return res.json({ error: true, code: "REQ_FIELD", message: `Missing ${k}` });
+//       }
+//     }
+
+//     // 1) session + currency
+//     const session = await Session.findById(w.session_id);
+//     if (!session || session.status !== "active") {
+//       return res.json({ error: true, code: SESSION_NOT_FOUND, message: "Session invalid" });
+//     }
+//     if (session.currency !== w.currency) {
+//       return res.json({ error: true, code: CURRENCY_NOT_SUPPORTED, message: "Currency mismatch" });
+//     }
+
+//     // 2) amount > 0
+//     const amountNum = Number(w.amount);
+//     if (!(amountNum > 0)) {
+//       return res.json({ error: true, code: INVALID_PAYLOAD, message: "Amount must be > 0" });
+//     }
+
+//     // 3) idempotency on win transaction_id
+//     const existing = await Win.findById(w.transaction_id);
+//     if (existing) {
+//       const user = await User.findById(session.userId);
+//       return res.json({
+//         error: false, code: OK, message: "Win already processed",
+//         data: { balance: toMoneyString(user?.balance || 0), transaction_id: existing._id }
+//       });
+//     }
+
+//     // 4) referenced bet must exist and not be rolled back
+//     const bet = await Bet.findById(w.bet_trx_id);
+//     if (!bet) return res.json({ error: true, code: ACTION_NOT_FOUND, message: "Original bet not found" });
+//     if (bet.status === "rolled_back") {
+//       return res.json({ error: true, code: ACTION_ROLLBACKED, message: "Bet was rolled back" });
+//     }
+
+//     // 5) credit user
+//     const user = await User.findById(session.userId);
+//     if (!user) return res.json({ error: true, code: "PLAYER_NOT_FOUND", message: "User not found" });
+
+//     user.balance = Number(user.balance || 0) + amountNum;
+//     await user.save();
+
+//     // 6) persist win
+//     await Win.create({
+//       _id: w.transaction_id,
+//       gameUuid: w.game_uuid,
+//       betId: w.bet_id,
+//       betTrxId: w.bet_trx_id,
+//       userId: session.userId,
+//       sessionId: w.session_id,
+//       currency: w.currency,
+//       amount: amountNum,
+//       freeround: w.freeround_id
+//         ? { id: w.freeround_id || "", clientId: w.client_freeround_id || "", type: w.freeround_type || "" }
+//         : undefined,
+//     });
+
+//     // 7) respond with new balance
+//     return res.json({
+//       error: false, code: OK, message: "Win credited successfully",
+//       data: { balance: toMoneyString(user.balance), transaction_id: w.transaction_id }
+//     });
+//   } catch (e) {
+//     console.error(e);
+//     return res.json({ error: true, code: "UNHANDLED", message: "Server error" });
+//   }
+// }
 
 export async function handleRollback(req, res) {
   try {
     const r = req.body || {};
     console.log("[rollback] start", r);
 
-    for (const k of ["game_uuid","amount","currency","session_id","bet_id","transaction_id","rollback_transaction_id"]) {
+    for (const k of [
+      "game_uuid",
+      "amount",
+      "currency",
+      "session_id",
+      "bet_id",
+      "transaction_id",
+      "rollback_transaction_id",
+    ]) {
       if (!r[k] && r[k] !== 0) {
         console.log("[rollback] missing", k);
-        return res.status(200).json({ error:true, code:"REQ_FIELD", message:`Missing ${k}` });
+        return res
+          .status(200)
+          .json({ error: true, code: "REQ_FIELD", message: `Missing ${k}` });
       }
     }
 
     const session = await Session.findById(r.session_id);
-    console.log("[rollback] session", session?._id, session?.status, session?.currency);
+    console.log(
+      "[rollback] session",
+      session?._id,
+      session?.status,
+      session?.currency
+    );
     if (!session || session.status !== "active") {
-      return res.status(200).json({ error:true, code:SESSION_NOT_FOUND, message:"Session invalid" });
+      return res
+        .status(200)
+        .json({
+          error: true,
+          code: SESSION_NOT_FOUND,
+          message: "Session invalid",
+        });
     }
     if (session.currency !== r.currency) {
       console.log("[rollback] currency mismatch", session.currency, r.currency);
-      return res.status(200).json({ error:true, code:CURRENCY_NOT_SUPPORTED, message:"Currency mismatch" });
+      return res
+        .status(200)
+        .json({
+          error: true,
+          code: CURRENCY_NOT_SUPPORTED,
+          message: "Currency mismatch",
+        });
     }
 
     const amountNum = Number(r.amount);
     if (!(amountNum > 0)) {
       console.log("[rollback] invalid amount", r.amount);
-      return res.status(200).json({ error:true, code:INVALID_PAYLOAD, message:"Amount must be > 0" });
+      return res
+        .status(200)
+        .json({
+          error: true,
+          code: INVALID_PAYLOAD,
+          message: "Amount must be > 0",
+        });
     }
 
     const bet = await Bet.findById(r.rollback_transaction_id);
     console.log("[rollback] bet?", !!bet, r.rollback_transaction_id);
     if (!bet) {
-      return res.status(200).json({ error:true, code:ACTION_NOT_FOUND, message:"Original bet not found" });
+      return res
+        .status(200)
+        .json({
+          error: true,
+          code: ACTION_NOT_FOUND,
+          message: "Original bet not found",
+        });
     }
 
     const user = await User.findById(session.userId);
     console.log("[rollback] user", session.userId, "exists:", !!user);
     if (!user) {
-      return res.status(200).json({ error:true, code:"PLAYER_NOT_FOUND", message:"User not found" });
+      return res
+        .status(200)
+        .json({
+          error: true,
+          code: "PLAYER_NOT_FOUND",
+          message: "User not found",
+        });
     }
 
     if (bet.status === "rolled_back") {
       console.log("[rollback] already rolled back");
       return res.status(200).json({
-        error:false, code:OK, message:"Rollback already processed",
-        data:{ balance:m(user.balance), transaction_id:r.transaction_id }
+        error: false,
+        code: OK,
+        message: "Rollback already processed",
+        data: { balance: m(user.balance), transaction_id: r.transaction_id },
       });
     }
 
-    const isFree = !!(bet.freeround && (bet.freeround.id || bet.freeround.clientId));
+    const isFree = !!(
+      bet.freeround &&
+      (bet.freeround.id || bet.freeround.clientId)
+    );
     if (!isFree) {
       user.balance = Number(user.balance || 0) + amountNum;
       await user.save();
-      console.log("[rollback] refunded", amountNum, "new balance", user.balance);
+      console.log(
+        "[rollback] refunded",
+        amountNum,
+        "new balance",
+        user.balance
+      );
     } else {
       console.log("[rollback] freeround — no refund");
     }
@@ -297,30 +408,51 @@ export async function handleRollback(req, res) {
     await bet.save();
 
     return res.status(200).json({
-      error:false, code:OK, message:"Rollback processed",
-      data:{ balance:m(user.balance), transaction_id:r.transaction_id }
+      error: false,
+      code: OK,
+      message: "Rollback processed",
+      data: { balance: m(user.balance), transaction_id: r.transaction_id },
     });
   } catch (e) {
     console.error("ROLLBACK ERROR (detailed):", e);
-    return res.status(200).json({ error:true, code:"UNHANDLED", message:e.message || "Server error" });
+    return res
+      .status(200)
+      .json({
+        error: true,
+        code: "UNHANDLED",
+        message: e.message || "Server error",
+      });
   }
 }
-
 
 // controllers/gameserviceController.js
 export async function handleBulkWin(req, res) {
   try {
     const { transactions = [] } = req.body || {};
     if (!Array.isArray(transactions) || transactions.length === 0) {
-      return res.status(200).json({ error: true, code: "INVALID_PAYLOAD", message: "transactions[] required" });
+      return res
+        .status(200)
+        .json({
+          error: true,
+          code: "INVALID_PAYLOAD",
+          message: "transactions[] required",
+        });
     }
 
     const successes = [];
-    const pushed = new Set();  // <— track what we already returned
+    const pushed = new Set(); // <— track what we already returned
 
     for (const t of transactions) {
       try {
-        for (const k of ["game_uuid","amount","currency","session_id","bet_id","transaction_id","bet_trx_id"]) {
+        for (const k of [
+          "game_uuid",
+          "amount",
+          "currency",
+          "session_id",
+          "bet_id",
+          "transaction_id",
+          "bet_trx_id",
+        ]) {
           if (!t[k] && t[k] !== 0) throw new Error(`Missing ${k}`);
         }
 
@@ -331,15 +463,20 @@ export async function handleBulkWin(req, res) {
         }
 
         const session = await Session.findById(t.session_id);
-        if (!session || session.status !== "active") throw new Error("SESSION_NOT_FOUND");
-        if (session.currency !== t.currency) throw new Error("CURRENCY_NOT_SUPPORTED");
+        if (!session || session.status !== "active")
+          throw new Error("SESSION_NOT_FOUND");
+        if (session.currency !== t.currency)
+          throw new Error("CURRENCY_NOT_SUPPORTED");
 
         const amountNum = Number(t.amount);
         if (!(amountNum > 0)) throw new Error("INVALID_PAYLOAD");
 
         // DB idempotency: if already recorded, count as success (but only push once)
         if (await Win.findById(t.transaction_id)) {
-          successes.push({ transaction_id: t.transaction_id, client_trx_id: t.transaction_id });
+          successes.push({
+            transaction_id: t.transaction_id,
+            client_trx_id: t.transaction_id,
+          });
           pushed.add(t.transaction_id);
           continue;
         }
@@ -364,11 +501,18 @@ export async function handleBulkWin(req, res) {
           currency: t.currency,
           amount: amountNum,
           freeround: t.freeround_id
-            ? { id: t.freeround_id || "", clientId: t.client_freeround_id || "", type: t.freeround_type || "" }
+            ? {
+                id: t.freeround_id || "",
+                clientId: t.client_freeround_id || "",
+                type: t.freeround_type || "",
+              }
             : undefined,
         });
 
-        successes.push({ transaction_id: t.transaction_id, client_trx_id: t.transaction_id });
+        successes.push({
+          transaction_id: t.transaction_id,
+          client_trx_id: t.transaction_id,
+        });
         pushed.add(t.transaction_id);
       } catch {
         // skip failed item per spec
@@ -379,10 +523,183 @@ export async function handleBulkWin(req, res) {
       error: false,
       code: "OK",
       message: "Bulk win processed",
-      data: { transactions: successes }
+      data: { transactions: successes },
     });
   } catch (e) {
     console.error("BULK-WIN ERROR:", e);
-    return res.status(200).json({ error: true, code: "UNHANDLED", message: "Server error" });
+    return res
+      .status(200)
+      .json({ error: true, code: "UNHANDLED", message: "Server error" });
+  }
+}
+
+export async function handleWin(req, res) {
+  try {
+    const w = req.body || {};
+
+    // 0) required fields (per Abra docs)
+    const required = [
+      "game_uuid",
+      "amount",
+      "currency",
+      "session_id",
+      "bet_id",
+      "transaction_id",
+      "bet_trx_id",
+      "type", // "win" | "jackpot"
+    ];
+    for (const k of required) {
+      if (w[k] === undefined || w[k] === null || w[k] === "") {
+        return res.json({
+          error: true,
+          code: "REQ_FIELD",
+          message: `Missing ${k}`,
+        });
+      }
+    }
+
+    // normalise / validate type
+    const winType = String(w.type).toLowerCase();
+    if (!["win", "jackpot"].includes(winType)) {
+      return res.json({
+        error: true,
+        code: INVALID_PAYLOAD,
+        message: "Invalid win type",
+      });
+    }
+
+    // 1) Validate session + currency
+    const session = await Session.findById(w.session_id);
+    if (!session || session.status !== "active") {
+      return res.json({
+        error: true,
+        code: SESSION_NOT_FOUND,
+        message: "Session invalid",
+      });
+    }
+
+    if (session.currency !== w.currency) {
+      return res.json({
+        error: true,
+        code: CURRENCY_NOT_SUPPORTED,
+        message: "Currency mismatch",
+      });
+    }
+
+    // 2) amount > 0
+    const amountNum = Number(w.amount);
+    if (!(amountNum > 0)) {
+      return res.json({
+        error: true,
+        code: INVALID_PAYLOAD,
+        message: "Amount must be > 0",
+      });
+    }
+
+    // 3) Idempotency by transaction_id (same request re-sent)
+    let user;
+    const existingByTrx = await Win.findById(w.transaction_id);
+    if (existingByTrx) {
+      user = await User.findById(session.userId);
+      return res.json({
+        error: false,
+        code: OK,
+        message: "Win already processed",
+        data: {
+          balance: toMoneyString(user?.balance || 0),
+          transaction_id: existingByTrx._id,
+        },
+      });
+    }
+
+    // 4) Referenced bet must exist and not be rolled back
+    const bet = await Bet.findById(w.bet_trx_id);
+    if (!bet) {
+      return res.json({
+        error: true,
+        code: ACTION_NOT_FOUND,
+        message: "Original bet not found",
+      });
+    }
+    if (bet.status === "rolled_back") {
+      return res.json({
+        error: true,
+        code: ACTION_ROLLBACKED,
+        message: "Bet was rolled back",
+      });
+    }
+
+    // 5) Allow TWO wins per bet: one "win" and one "jackpot".
+    // Check for existing win for SAME bet + SAME type.
+    const existingSameBetType = await Win.findOne({
+      gameUuid: w.game_uuid,
+      betId: w.bet_id,
+      type: winType,
+    });
+
+    if (existingSameBetType) {
+      // treat as idempotent duplicate for that type
+      user = await User.findById(session.userId);
+      return res.json({
+        error: false,
+        code: OK,
+        message: "Win already processed",
+        data: {
+          balance: toMoneyString(user?.balance || 0),
+          transaction_id: existingSameBetType._id,
+        },
+      });
+    }
+
+    // 6) credit user
+    user = user || (await User.findById(session.userId));
+    if (!user) {
+      return res.json({
+        error: true,
+        code: "PLAYER_NOT_FOUND",
+        message: "User not found",
+      });
+    }
+
+    user.balance = Number(user.balance || 0) + amountNum;
+    await user.save();
+
+    // 7) persist win (IMPORTANT: include type)
+    await Win.create({
+      _id: w.transaction_id, // provider win transaction id
+      gameUuid: w.game_uuid,
+      betId: w.bet_id,
+      betTrxId: w.bet_trx_id,
+      type: winType, // "win" | "jackpot"
+      userId: session.userId,
+      sessionId: w.session_id,
+      currency: w.currency,
+      amount: amountNum,
+      freeround: w.freeround_id
+        ? {
+            id: w.freeround_id || "",
+            clientId: w.client_freeround_id || "",
+            type: w.freeround_type || "",
+          }
+        : undefined,
+    });
+
+    // 8) respond with updated balance
+    return res.json({
+      error: false,
+      code: OK,
+      message: "Win credited successfully",
+      data: {
+        balance: toMoneyString(user.balance),
+        transaction_id: w.transaction_id,
+      },
+    });
+  } catch (e) {
+    console.error("handleWin error:", e);
+    return res.json({
+      error: true,
+      code: "UNHANDLED",
+      message: "Server error",
+    });
   }
 }
