@@ -696,7 +696,7 @@ export async function handleBulkWin(req, res) {
         message: "transactions[] required",
         data: { transactions: [] },
       };
-      console.log("BULK-WIN RESP:", resp);
+
       return res.status(200).json(resp);
     }
 
@@ -873,7 +873,7 @@ export async function handleBulkWin(req, res) {
         transactions: successes,
       },
     };
-    console.log("BULK-WIN RESP:", JSON.stringify(resp, null, 2));
+   
     return res.status(200).json(resp);
   } catch (e) {
     console.error("BULK-WIN ERROR:", e);
@@ -883,7 +883,6 @@ export async function handleBulkWin(req, res) {
       message: "Server error",
       data: { transactions: [] },
     };
-    console.log("BULK-WIN RESP:", resp);
     return res.status(200).json(resp);
   }
 }

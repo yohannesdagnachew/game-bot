@@ -2,7 +2,7 @@ import app from './app.js';
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import { startDailySpinCron } from './cron/dailySpins.js';
-import { dbTinder } from './db.js';
+import { dbTinder, dbQuiz } from './db.js';
 
 
 
@@ -25,6 +25,9 @@ dbTinder.once('connected', () => {
   console.log('✅ Tinder DB connected.');
 });
 
+dbQuiz.once('connected', () => {
+  console.log('✅ Quiz DB connected.');
+});
 
 
 

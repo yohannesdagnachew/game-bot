@@ -17,6 +17,8 @@ import userModel from "../models/userModel.js";
 import crypto from "crypto";
 import TinderTransaction from "../models/Tinder/tinderTransactionModel.js";
 import TinderUser from "../models/Tinder/tinderUserModel.js";
+import QuizTransaction from "../models/Quiz/transactionModel.js"
+
 
 const transactionRouter = router.Router();
 
@@ -361,7 +363,58 @@ transactionRouter.post("/webhook", async (req, res, next) => {
   try {
     const payload = JSON.stringify(req.body);
     const {email} = req.body;
-    console.log(req.body)
+
+    if (email.includes("quizbot")) {
+      console.log("######################Quiz#######################")
+        try {
+        const payload = JSON.stringify(req.body);
+        const chapaSig = req.headers["chapa-signature"];
+        const xChapaSig = req.headers["x-chapa-signature"];
+
+        const expectedHash = crypto
+          .createHmac("sha256", CHAPA_WEBHOOK_SECRET)
+          .update(payload)
+          .digest("hex");
+
+        if (![chapaSig, xChapaSig].includes(expectedHash)) {
+          console.warn("❌ Invalid Webhook signature:", {
+            chapaSig,
+            xChapaSig,
+          });
+          return res.status(400).json({ error: "Invalid signature" });
+        }
+
+      const txRef = req.body.tx_ref;
+
+      const transaction = await QuizTransaction.findById(txRef);
+      if (!transaction) throw new Error("Transaction not found");
+
+       const event = req.body.event;
+
+        if (event === "charge.success") {
+          if (transaction.status !== "success") {
+             transaction.status = 'success';
+             await transaction.save();
+
+          } else {
+            console.log(
+              "⚠️ Duplicate success webhook ignored:",
+              transaction.tx_ref
+            );
+          }
+        } else if (event === "charge.failed" || event === "charge.cancelled") {
+           transaction.status = "failed";
+           await transaction.save();
+        }
+        
+      return res.sendStatus(200);
+      } catch (error) {
+        console.error("Webhook Error:", error);
+        next(error);
+        return
+      }
+
+    }
 
     if (!email.includes("gamebot")) {
 
@@ -387,7 +440,7 @@ transactionRouter.post("/webhook", async (req, res, next) => {
         const txRef = req.body.tx_ref;
         const transaction = await findTransactionByIdTinder(txRef);
         if (!transaction) throw new Error("Transaction not found");
-        console.log(transaction)
+      
 
         if (transaction.status === "success") {
           console.log("⚠️ Duplicate success webhook ignored:");
