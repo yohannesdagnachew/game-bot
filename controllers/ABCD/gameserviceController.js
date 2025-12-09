@@ -687,32 +687,42 @@ export async function handleBulkWin(req, res) {
   try {
     const transactions = Array.isArray(body.transactions)
       ? body.transactions
-      : [];
+      : null;
 
-    if (transactions.length === 0) {
-      const resp = {
+    // If transactions is not an array at all → true invalid payload
+    if (transactions === null) {
+      return res.status(200).json({
         error: true,
         code: "INVALID_PAYLOAD",
-        message: "transactions[] required",
+        message: "transactions[] must be an array",
         data: { transactions: [] },
-      };
+      });
+    }
 
-      return res.status(200).json(resp);
+    // IMPORTANT: If there are simply no wins (e.g., crash game, no cashout),
+    // treat this as a SUCCESS with an empty array, not an error.
+    if (transactions.length === 0) {
+      return res.status(200).json({
+        error: false,
+        code: OK,
+        message: "No wins to process",
+        data: { transactions: [] },
+      });
     }
 
     const successes = [];
     const pushed = new Set(); // prevent duplicates in response
+    let lastErrorCode = null; // for "all failed" case
 
     for (const t of transactions) {
       try {
         const txId = String(t.transaction_id || "");
         const winType =
-          t.type && typeof t.type === "string"
-            ? t.type.toLowerCase()
-            : "win";
+          t.type && typeof t.type === "string" ? t.type.toLowerCase() : "win";
 
         if (!txId) {
           console.warn("BULK-WIN item missing transaction_id:", t);
+          lastErrorCode = lastErrorCode || "MISSING_transaction_id";
           continue;
         }
 
@@ -724,23 +734,14 @@ export async function handleBulkWin(req, res) {
         // ================= JACKPOT: FORCE ACCEPT =================
         if (winType === "jackpot") {
           try {
-            // Optional: try to read session/user just like handleWin, but
-            // we ignore all errors and do NOT enforce anything.
+            // Optional best-effort session/user lookup
             const session = await Session.findById(t.session_id).catch(
               () => null
             );
             if (session) {
-              const user = await User.findById(session.userId).catch(
-                () => null
-              );
-              if (user) {
-                // If you want to also credit jackpot in bulk, uncomment:
-                // const amountNum = Number(t.amount || 0);
-                // if (amountNum > 0) {
-                //   user.balance = Number(user.balance || 0) + amountNum;
-                //   await user.save();
-                // }
-              }
+              await User.findById(session.userId).catch(() => null);
+              // If you want to credit jackpot here, you can do it, but
+              // currently it's commented out in your original code.
             }
           } catch (err) {
             console.warn("Bulk jackpot best-effort error (ignored):", err);
@@ -749,10 +750,10 @@ export async function handleBulkWin(req, res) {
           // ALWAYS mark jackpot as success
           successes.push({
             transaction_id: txId,
-            client_trx_id: txId,
+            client_trx_id: txId, // or your own ID mapping
           });
           pushed.add(txId);
-          continue; // go next transaction
+          continue;
         }
 
         // ================= NORMAL WIN LOGIC =================
@@ -842,6 +843,7 @@ export async function handleBulkWin(req, res) {
               : undefined,
           });
         } catch (err) {
+          // ignore duplicate key (_id already exists) => idempotent
           if (!(err && err.code === 11000)) {
             throw err;
           }
@@ -853,6 +855,12 @@ export async function handleBulkWin(req, res) {
         });
         pushed.add(txId);
       } catch (err) {
+        const code =
+          (err && typeof err.message === "string" && err.message) ||
+          "INVALID_PAYLOAD";
+
+        lastErrorCode = lastErrorCode || code;
+
         console.warn(
           "BULK-WIN item failed:",
           t,
@@ -864,7 +872,19 @@ export async function handleBulkWin(req, res) {
       }
     }
 
-    // A simple message; they mainly care about error/code and transactions[]
+    // If nothing at all succeeded, follow their "Complete Failure" spec
+    if (successes.length === 0) {
+      return res.status(200).json({
+        error: true,
+        code: lastErrorCode || "NO_TRANSACTIONS_PROCESSED",
+        message: "No bulk-win transactions were accepted",
+        data: {
+          transactions: [],
+        },
+      });
+    }
+
+    // Normal success / partial success
     const resp = {
       error: false,
       code: OK,
@@ -873,7 +893,7 @@ export async function handleBulkWin(req, res) {
         transactions: successes,
       },
     };
-   
+
     return res.status(200).json(resp);
   } catch (e) {
     console.error("BULK-WIN ERROR:", e);
